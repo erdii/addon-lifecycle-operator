@@ -2,7 +2,10 @@
 # relocate IMAGE_ORG
 
 IMAGE_ORG?=quay.io/openshift
-MODULE=github.com/openshift/addon-lifecycle-operator
+MODULE:=github.com/openshift/addon-lifecycle-operator
+CONTROLLER_GEN_VERSION:=v0.5.0
+OLM_VERSION:=v0.17.0
+KIND_KUBECONFIG:=bin/e2e/kubeconfig
 
 SHELL=/bin/bash
 .SHELLFLAGS=-euo pipefail -c
@@ -18,19 +21,32 @@ LD_FLAGS=-X $(MODULE)/internal/version.Version=$(VERSION) \
 			-X $(MODULE)/internal/version.Commit=$(SHORT_SHA) \
 			-X $(MODULE)/internal/version.BuildDate=$(BUILD_DATE)
 
-# Default to using podman if it is available
-# Override by setting envvar like `DOCKER_COMMAND=my-docker make`
-ifeq (,$(shell command -v podman))
-DOCKER_COMMAND?="docker"
+
+# problem 1: my user is not part of the `docker` group, thus i need `sudo kind`
+# problem 2: if using podman, `sudo kind` is also needed because the kubelet cannot run in an unprivileged container
+# solution: test for these conditions and set $KIND_COMMAND + $KIND_EXPERIMENTAL_PROVIDER accordingly
+# https://github.com/kubernetes-sigs/kind/blob/main/pkg/internal/runtime/runtime.go#L12
+ifneq (,$(shell command -v podman))
+	export KIND_EXPERIMENTAL_PROVIDER:=podman
+	DOCKER_COMMAND:=podman
+	KIND_COMMAND:=sudo kind
 else
-DOCKER_COMMAND?="podman"
+	export KIND_EXPERIMENTAL_PROVIDER:=docker
+	ifeq (,$(groups | grep docker))
+		DOCKER_COMMAND:=sudo docker
+		KIND_COMMAND:=sudo kind
+	else
+		DOCKER_COMMAND:=docker
+		KIND_COMMAND:=kind
+	endif
 endif
 
+# TODO: move in-repo
 # Get the currently used golang install path (in GOPATH/bin, unless GOBIN is set)
 ifeq (,$(shell go env GOBIN))
-GOBIN=$(shell go env GOPATH)/bin
+	GOBIN=$(shell go env GOPATH)/bin
 else
-GOBIN=$(shell go env GOBIN)
+	GOBIN=$(shell go env GOBIN)
 endif
 
 # -------
@@ -69,15 +85,28 @@ run: generate fmt vet manifests
 
 # Generate manifests e.g. CRD, RBAC etc.
 manifests: controller-gen
-	$(CONTROLLER_GEN) crd:crdVersions=v1 rbac:roleName=alo-manager paths="./..." output:crd:artifacts:config=config/crd
+	$(CONTROLLER_GEN) crd:crdVersions=v1 \
+		rbac:roleName=alo-manager \
+		paths="./..." \
+		output:crd:artifacts:config=config/deploy
 
 # Generate code
 generate: controller-gen
 	$(CONTROLLER_GEN) object paths=./apis/...
 
+# Makes sandwich
+# https://xkcd.com/149/
+sandwich:
+ifneq ($(shell id -u), 0)
+	@echo "What? Make it yourself."
+else
+	@echo "Okay."
+endif
+
 # find or download controller-gen
 # download controller-gen if necessary
 # Note: this will not upgrade from previously downloaded controller-gen versions
+# TODO: fix ^
 controller-gen:
 ifeq (, $(shell which controller-gen))
 	@{ \
@@ -85,7 +114,7 @@ ifeq (, $(shell which controller-gen))
 	CONTROLLER_GEN_TMP_DIR=$$(mktemp -d) ;\
 	cd $$CONTROLLER_GEN_TMP_DIR ;\
 	go mod init tmp ;\
-	go get sigs.k8s.io/controller-tools/cmd/controller-gen@v0.5.0 ;\
+	go get sigs.k8s.io/controller-tools/cmd/controller-gen@$(CONTROLLER_GEN_VERSION) ;\
 	rm -rf $$CONTROLLER_GEN_TMP_DIR ;\
 	}
 CONTROLLER_GEN=$(GOBIN)/controller-gen
@@ -118,6 +147,58 @@ pre-commit-install:
 	@pre-commit install
 .PHONY: pre-commit-install
 
+log-kind-vars:
+	@echo "DOCKER_COMMAND=$(DOCKER_COMMAND)"
+	@echo "KIND_EXPERIMENTAL_PROVIDER=$(KIND_EXPERIMENTAL_PROVIDER)"
+	@echo "KIND_COMMAND=$(KIND_COMMAND)"
+	env | grep KIND
+.PHONY: log-kind-vars
+
+create-kind-cluster: log-kind-vars
+	mkdir -p bin/e2e
+	$(KIND_COMMAND) create cluster \
+		--kubeconfig=$(KIND_KUBECONFIG) \
+		--name="alo-e2e"
+	sudo chown $$USER: $(KIND_KUBECONFIG)
+.PHONY: create-kind-cluster
+
+delete-kind-cluster: log-kind-vars
+	$(KIND_COMMAND) delete cluster \
+		--kubeconfig=$(KIND_KUBECONFIG) \
+		--name "alo-e2e"
+.PHONY: delete-kind-cluster
+
+setup-e2e-kind: | \
+	create-kind-cluster \
+	setup-olm \
+	setup-openshift-console
+
+setup-olm:
+	set -ex \
+		&& export KUBECONFIG=$(KIND_KUBECONFIG) \
+		&& kubectl apply -f https://github.com/operator-framework/operator-lifecycle-manager/releases/download/$(OLM_VERSION)/crds.yaml \
+		&& kubectl apply -f https://github.com/operator-framework/operator-lifecycle-manager/releases/download/$(OLM_VERSION)/olm.yaml \
+		&& kubectl wait --for=condition=available deployment/olm-operator -n olm --timeout=240s \
+		&& kubectl wait --for=condition=available deployment/catalog-operator -n olm --timeout=240s
+.PHONY: setup-olm
+
+setup-openshift-console:
+	set -ex \
+		&& export KUBECONFIG=$(KIND_KUBECONFIG) \
+		&& kubectl apply -f hack/openshift-console.yaml
+.PHONY: setup-openshift-console
+
+setup-alo: build-image-addon-lifecycle-operator-manager
+	set -ex \
+		&& export KUBECONFIG=$(KIND_KUBECONFIG) \
+		&& $(KIND_COMMAND) load image-archive \
+			bin/image/addon-lifecycle-operator-manager.tar \
+			--name alo-e2e \
+		&& kubectl apply -f config/deploy \
+		&& yq -y '.spec.template.spec.containers[0].image = "$(IMAGE_ORG)/addon-lifecycle-operator-manager:$(VERSION)"' config/deploy/deployment.yaml.tpl \
+			| kubectl apply -f -
+.PHONY: setup-alo
+
 # ----------------
 # Container Images
 # ----------------
@@ -132,14 +213,15 @@ push-images: \
 
 .SECONDEXPANSION:
 build-image-%: bin/linux_amd64/$$*
-	@rm -rf bin/image/$*
-	@mkdir -p bin/image/$*
-	@cp -a bin/linux_amd64/$* bin/image/$*
-	@cp -a config/docker/$*.Dockerfile bin/image/$*/Dockerfile
-	@cp -a config/docker/passwd bin/image/$*/passwd
-	@echo building ${IMAGE_ORG}/$*:${VERSION}
-	@$(DOCKER_COMMAND) build -t ${IMAGE_ORG}/$*:${VERSION} bin/image/$*
+	@rm -rf "bin/image/$*" "bin/image/$*.tar"
+	@mkdir -p "bin/image/$*"
+	@cp -a "bin/linux_amd64/$*" "bin/image/$*"
+	@cp -a "config/docker/$*.Dockerfile" "bin/image/$*/Dockerfile"
+	@cp -a "config/docker/passwd" "bin/image/$*/passwd"
+	@echo "building ${IMAGE_ORG}/$*:${VERSION}"
+	@$(DOCKER_COMMAND) build -t "${IMAGE_ORG}/$*:${VERSION}" "bin/image/$*"
+	@$(DOCKER_COMMAND) image save -o "bin/image/$*.tar" "${IMAGE_ORG}/$*:${VERSION}"
 
 push-image-%: build-image-$$*
-	@$(DOCKER_COMMAND) push ${IMAGE_ORG}/$*:${VERSION}
-	@echo pushed ${IMAGE_ORG}/$*:${VERSION}
+	@$(DOCKER_COMMAND) push "${IMAGE_ORG}/$*:${VERSION}"
+	@echo pushed "${IMAGE_ORG}/$*:${VERSION}"
