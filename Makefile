@@ -164,8 +164,9 @@ create-kind-cluster: log-kind-vars
 
 delete-kind-cluster: log-kind-vars
 	$(KIND_COMMAND) delete cluster \
-		--kubeconfig=$(KIND_KUBECONFIG) \
+		--kubeconfig="$(KIND_KUBECONFIG)" \
 		--name "alo-e2e"
+	rm -rf "$(KIND_KUBECONFIG)"
 .PHONY: delete-kind-cluster
 
 setup-e2e-kind: | \
