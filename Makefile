@@ -86,7 +86,7 @@ run: generate fmt vet manifests
 # Generate manifests e.g. CRD, RBAC etc.
 manifests: controller-gen
 	$(CONTROLLER_GEN) crd:crdVersions=v1 \
-		rbac:roleName=alo-manager \
+		rbac:roleName=addon-operator-manager \
 		paths="./..." \
 		output:crd:artifacts:config=config/deploy
 
@@ -158,21 +158,22 @@ create-kind-cluster: log-kind-vars
 	mkdir -p bin/e2e
 	$(KIND_COMMAND) create cluster \
 		--kubeconfig=$(KIND_KUBECONFIG) \
-		--name="alo-e2e"
+		--name="addon-operator-e2e"
 	sudo chown $$USER: $(KIND_KUBECONFIG)
 .PHONY: create-kind-cluster
 
 delete-kind-cluster: log-kind-vars
 	$(KIND_COMMAND) delete cluster \
 		--kubeconfig="$(KIND_KUBECONFIG)" \
-		--name "alo-e2e"
+		--name "addon-operator-e2e"
 	rm -rf "$(KIND_KUBECONFIG)"
 .PHONY: delete-kind-cluster
 
 setup-e2e-kind: | \
 	create-kind-cluster \
 	setup-olm \
-	setup-openshift-console
+	setup-openshift-console \
+	setup-ao
 
 setup-olm:
 	set -ex \
@@ -189,16 +190,16 @@ setup-openshift-console:
 		&& kubectl apply -f hack/openshift-console.yaml
 .PHONY: setup-openshift-console
 
-setup-alo: build-image-addon-operator-manager
+setup-ao: build-image-addon-operator-manager
 	set -ex \
 		&& export KUBECONFIG=$(KIND_KUBECONFIG) \
 		&& $(KIND_COMMAND) load image-archive \
 			bin/image/addon-operator-manager.tar \
-			--name alo-e2e \
+			--name addon-operator-e2e \
 		&& kubectl apply -f config/deploy \
 		&& yq -y '.spec.template.spec.containers[0].image = "$(IMAGE_ORG)/addon-operator-manager:$(VERSION)"' config/deploy/deployment.yaml.tpl \
 			| kubectl apply -f -
-.PHONY: setup-alo
+.PHONY: setup-ao
 
 # ----------------
 # Container Images
