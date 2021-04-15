@@ -2,7 +2,7 @@
 # relocate IMAGE_ORG
 
 IMAGE_ORG?=quay.io/openshift
-MODULE:=github.com/openshift/addon-lifecycle-operator
+MODULE:=github.com/openshift/addon-operator
 CONTROLLER_GEN_VERSION:=v0.5.0
 OLM_VERSION:=v0.17.0
 KIND_KUBECONFIG:=bin/e2e/kubeconfig
@@ -54,7 +54,7 @@ endif
 # -------
 
 all: \
-	bin/linux_amd64/addon-lifecycle-operator-manager
+	bin/linux_amd64/addon-operator-manager
 
 bin/linux_amd64/%: GOARGS = GOOS=linux GOARCH=amd64
 
@@ -75,7 +75,7 @@ clean:
 # Run against the configured Kubernetes cluster in ~/.kube/config or $KUBECONFIG
 run: generate fmt vet manifests
 	go run -ldflags "-w $(LD_FLAGS)" \
-		./cmd/addon-lifecycle-operator-manager/main.go \
+		./cmd/addon-operator-manager/main.go \
 			-pprof-addr="127.0.0.1:8065"
 .PHONY: run
 
@@ -189,14 +189,14 @@ setup-openshift-console:
 		&& kubectl apply -f hack/openshift-console.yaml
 .PHONY: setup-openshift-console
 
-setup-alo: build-image-addon-lifecycle-operator-manager
+setup-alo: build-image-addon-operator-manager
 	set -ex \
 		&& export KUBECONFIG=$(KIND_KUBECONFIG) \
 		&& $(KIND_COMMAND) load image-archive \
-			bin/image/addon-lifecycle-operator-manager.tar \
+			bin/image/addon-operator-manager.tar \
 			--name alo-e2e \
 		&& kubectl apply -f config/deploy \
-		&& yq -y '.spec.template.spec.containers[0].image = "$(IMAGE_ORG)/addon-lifecycle-operator-manager:$(VERSION)"' config/deploy/deployment.yaml.tpl \
+		&& yq -y '.spec.template.spec.containers[0].image = "$(IMAGE_ORG)/addon-operator-manager:$(VERSION)"' config/deploy/deployment.yaml.tpl \
 			| kubectl apply -f -
 .PHONY: setup-alo
 
@@ -205,11 +205,11 @@ setup-alo: build-image-addon-lifecycle-operator-manager
 # ----------------
 
 build-images: \
-	build-image-addon-lifecycle-operator-manager
+	build-image-addon-operator-manager
 .PHONY: build-images
 
 push-images: \
-	push-image-addon-lifecycle-operator-manager
+	push-image-addon-operator-manager
 .PHONY: push-images
 
 .SECONDEXPANSION:

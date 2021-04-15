@@ -1,4 +1,4 @@
-module github.com/openshift/addon-lifecycle-operator
+module github.com/openshift/addon-operator
 
 go 1.16
 

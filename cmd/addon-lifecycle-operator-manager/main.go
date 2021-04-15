@@ -13,7 +13,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/log/zap"
 	"sigs.k8s.io/controller-runtime/pkg/manager"
 
-	aloapis "github.com/openshift/addon-lifecycle-operator/apis"
+	aloapis "github.com/openshift/addon-operator/apis"
 )
 
 var (
@@ -47,7 +47,7 @@ func main() {
 		Port:                       9443,
 		LeaderElectionResourceLock: "leases",
 		LeaderElection:             enableLeaderElection,
-		LeaderElectionID:           "addon-lifecycle-operator-lock",
+		LeaderElectionID:           "addon-operator-lock",
 	})
 	if err != nil {
 		setupLog.Error(err, "unable to start manager")

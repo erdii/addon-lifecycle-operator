@@ -2,8 +2,8 @@ FROM scratch
 
 WORKDIR /
 COPY passwd /etc/passwd
-COPY addon-lifecycle-operator-manager /
+COPY addon-operator-manager /
 
 USER "noroot"
 
-ENTRYPOINT ["/addon-lifecycle-operator-manager"]
+ENTRYPOINT ["/addon-operator-manager"]

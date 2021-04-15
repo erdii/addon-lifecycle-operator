@@ -1,4 +1,4 @@
 apiVersion: v1
 kind: Namespace
 metadata:
-  name: addon-lifecycle-operator
+  name: addon-operator

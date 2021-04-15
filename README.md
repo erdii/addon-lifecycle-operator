@@ -1,4 +1,4 @@
-# addon-lifecycle-operator
+# addon-operator
 
 ### dev tools
 

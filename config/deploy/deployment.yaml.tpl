@@ -1,24 +1,24 @@
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: addon-lifecycle-operator
-  namespace: addon-lifecycle-operator
+  name: addon-operator
+  namespace: addon-operator
   labels:
-    app.kubernetes.io/name: addon-lifecycle-operator
+    app.kubernetes.io/name: addon-operator
 spec:
   replicas: 1
   selector:
     matchLabels:
-      app.kubernetes.io/name: addon-lifecycle-operator
+      app.kubernetes.io/name: addon-operator
   template:
     metadata:
       labels:
-        app.kubernetes.io/name: addon-lifecycle-operator
+        app.kubernetes.io/name: addon-operator
     spec:
-      serviceAccountName: addon-lifecycle-operator
+      serviceAccountName: addon-operator
       containers:
       - name: manager
-        image: quay.io/openshift/addon-lifecycle-operator:latest
+        image: quay.io/openshift/addon-operator:latest
         args:
         - --enable-leader-election
         resources:
