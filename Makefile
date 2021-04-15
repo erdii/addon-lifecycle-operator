@@ -29,7 +29,7 @@ LD_FLAGS=-X $(MODULE)/internal/version.Version=$(VERSION) \
 ifneq (,$(shell command -v podman))
 	export KIND_EXPERIMENTAL_PROVIDER:=podman
 	DOCKER_COMMAND:=podman
-	KIND_COMMAND:=sudo kind
+	KIND_COMMAND:=sudo --preserve-env=KIND_EXPERIMENTAL_PROVIDER kind
 else
 	export KIND_EXPERIMENTAL_PROVIDER:=docker
 	ifeq (,$(groups | grep docker))
