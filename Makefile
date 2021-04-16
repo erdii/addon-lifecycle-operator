@@ -21,26 +21,6 @@ LD_FLAGS=-X $(MODULE)/internal/version.Version=$(VERSION) \
 			-X $(MODULE)/internal/version.Commit=$(SHORT_SHA) \
 			-X $(MODULE)/internal/version.BuildDate=$(BUILD_DATE)
 
-
-# problem 1: my user is not part of the `docker` group, thus i need `sudo kind`
-# problem 2: if using podman, `sudo kind` is also needed because the kubelet cannot run in an unprivileged container
-# solution: test for these conditions and set $KIND_COMMAND + $KIND_EXPERIMENTAL_PROVIDER accordingly
-# https://github.com/kubernetes-sigs/kind/blob/main/pkg/internal/runtime/runtime.go#L12
-ifneq (,$(shell command -v podman))
-	export KIND_EXPERIMENTAL_PROVIDER:=podman
-	DOCKER_COMMAND:=podman
-	KIND_COMMAND:=sudo --preserve-env=KIND_EXPERIMENTAL_PROVIDER kind
-else
-	export KIND_EXPERIMENTAL_PROVIDER:=docker
-	ifeq (,$(groups | grep docker))
-		DOCKER_COMMAND:=sudo docker
-		KIND_COMMAND:=sudo kind
-	else
-		DOCKER_COMMAND:=docker
-		KIND_COMMAND:=kind
-	endif
-endif
-
 # TODO: move in-repo
 # Get the currently used golang install path (in GOPATH/bin, unless GOBIN is set)
 ifeq (,$(shell go env GOBIN))
@@ -147,59 +127,53 @@ pre-commit-install:
 	@pre-commit install
 .PHONY: pre-commit-install
 
-log-kind-vars:
-	@echo "DOCKER_COMMAND=$(DOCKER_COMMAND)"
-	@echo "KIND_EXPERIMENTAL_PROVIDER=$(KIND_EXPERIMENTAL_PROVIDER)"
-	@echo "KIND_COMMAND=$(KIND_COMMAND)"
-	env | grep KIND
-.PHONY: log-kind-vars
-
-create-kind-cluster: log-kind-vars
+create-kind-cluster:
 	mkdir -p bin/e2e
-	$(KIND_COMMAND) create cluster \
-		--kubeconfig=$(KIND_KUBECONFIG) \
-		--name="addon-operator-e2e"
+	@source hack/determine-container-runtime.sh \
+		&& $$KIND_COMMAND create cluster \
+			--kubeconfig=$(KIND_KUBECONFIG) \
+			--name="addon-operator-e2e"
 	sudo chown $$USER: $(KIND_KUBECONFIG)
 .PHONY: create-kind-cluster
 
-delete-kind-cluster: log-kind-vars
-	$(KIND_COMMAND) delete cluster \
-		--kubeconfig="$(KIND_KUBECONFIG)" \
-		--name "addon-operator-e2e"
-	rm -rf "$(KIND_KUBECONFIG)"
+delete-kind-cluster:
+	@source hack/determine-container-runtime.sh \
+		&& $$KIND_COMMAND delete cluster \
+			--kubeconfig="$(KIND_KUBECONFIG)" \
+			--name "addon-operator-e2e"
+	@rm -rf "$(KIND_KUBECONFIG)"
 .PHONY: delete-kind-cluster
 
 setup-e2e-kind: | \
 	create-kind-cluster \
-	setup-olm \
-	setup-openshift-console \
-	setup-ao
+	apply-olm \
+	apply-openshift-console \
+	apply-ao
 
-setup-olm:
-	set -ex \
-		&& export KUBECONFIG=$(KIND_KUBECONFIG) \
+apply-olm:
+	@export KUBECONFIG=$(KIND_KUBECONFIG) \
 		&& kubectl apply -f https://github.com/operator-framework/operator-lifecycle-manager/releases/download/$(OLM_VERSION)/crds.yaml \
 		&& kubectl apply -f https://github.com/operator-framework/operator-lifecycle-manager/releases/download/$(OLM_VERSION)/olm.yaml \
 		&& kubectl wait --for=condition=available deployment/olm-operator -n olm --timeout=240s \
 		&& kubectl wait --for=condition=available deployment/catalog-operator -n olm --timeout=240s
-.PHONY: setup-olm
+.PHONY: apply-olm
 
-setup-openshift-console:
-	set -ex \
-		&& export KUBECONFIG=$(KIND_KUBECONFIG) \
+apply-openshift-console:
+	@export KUBECONFIG=$(KIND_KUBECONFIG) \
 		&& kubectl apply -f hack/openshift-console.yaml
-.PHONY: setup-openshift-console
+.PHONY: apply-openshift-console
 
-setup-ao: build-image-addon-operator-manager
-	set -ex \
+apply-ao: build-image-addon-operator-manager
+	@source hack/determine-container-runtime.sh \
 		&& export KUBECONFIG=$(KIND_KUBECONFIG) \
-		&& $(KIND_COMMAND) load image-archive \
+		&& $$KIND_COMMAND load image-archive \
 			bin/image/addon-operator-manager.tar \
 			--name addon-operator-e2e \
 		&& kubectl apply -f config/deploy \
-		&& yq -y '.spec.template.spec.containers[0].image = "$(IMAGE_ORG)/addon-operator-manager:$(VERSION)"' config/deploy/deployment.yaml.tpl \
+		&& yq -y '.spec.template.spec.containers[0].image = "$(IMAGE_ORG)/addon-operator-manager:$(VERSION)"' \
+			config/deploy/deployment.yaml.tpl \
 			| kubectl apply -f -
-.PHONY: setup-ao
+.PHONY: apply-ao
 
 # ----------------
 # Container Images
@@ -215,15 +189,17 @@ push-images: \
 
 .SECONDEXPANSION:
 build-image-%: bin/linux_amd64/$$*
-	@rm -rf "bin/image/$*" "bin/image/$*.tar"
-	@mkdir -p "bin/image/$*"
-	@cp -a "bin/linux_amd64/$*" "bin/image/$*"
-	@cp -a "config/docker/$*.Dockerfile" "bin/image/$*/Dockerfile"
-	@cp -a "config/docker/passwd" "bin/image/$*/passwd"
-	@echo "building ${IMAGE_ORG}/$*:${VERSION}"
-	@$(DOCKER_COMMAND) build -t "${IMAGE_ORG}/$*:${VERSION}" "bin/image/$*"
-	@$(DOCKER_COMMAND) image save -o "bin/image/$*.tar" "${IMAGE_ORG}/$*:${VERSION}"
+	@source hack/determine-container-runtime.sh \
+		&& rm -rf "bin/image/$*" "bin/image/$*.tar" \
+		&& mkdir -p "bin/image/$*" \
+		&& cp -a "bin/linux_amd64/$*" "bin/image/$*" \
+		&& cp -a "config/docker/$*.Dockerfile" "bin/image/$*/Dockerfile" \
+		&& cp -a "config/docker/passwd" "bin/image/$*/passwd" \
+		&& echo "building ${IMAGE_ORG}/$*:${VERSION}" \
+		&& $$CONTAINER_COMMAND build -t "${IMAGE_ORG}/$*:${VERSION}" "bin/image/$*" \
+		&& $$CONTAINER_COMMAND image save -o "bin/image/$*.tar" "${IMAGE_ORG}/$*:${VERSION}"
 
 push-image-%: build-image-$$*
-	@$(DOCKER_COMMAND) push "${IMAGE_ORG}/$*:${VERSION}"
-	@echo pushed "${IMAGE_ORG}/$*:${VERSION}"
+	@source hack/determine-container-runtime.sh \
+		&& $$CONTAINER_COMMAND push "${IMAGE_ORG}/$*:${VERSION}" \
+		&& echo pushed "${IMAGE_ORG}/$*:${VERSION}"
