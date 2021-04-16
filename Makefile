@@ -10,6 +10,7 @@ CONTROLLER_GEN_VERSION:=v0.5.0
 OLM_VERSION:=v0.17.0
 KIND_VERSION:=v0.10.0
 YQ_VERSION:=v4@v4.7.0
+GOIMPORTS_VERSION:=v0.1.0
 
 SHELL=/bin/bash
 .SHELLFLAGS=-euo pipefail -c
@@ -30,7 +31,7 @@ UNAME_ARCH:=$(shell uname -m)
 
 # PATH/Bin
 DEPENDENCIES:=bin/dependencies/$(UNAME_OS)/$(UNAME_ARCH)
-export GOBIN?=$(abspath $(DEPENDENCIES)/bin)
+export GOBIN?=$(abspath bin/dependencies/bin)
 export PATH:=$(GOBIN):$(PATH)
 
 # -------
@@ -100,14 +101,25 @@ $(YQ):
 		&& touch "$(YQ)" \
 		&& echo
 
-	@(cd $(YQ_TMP) \
+# setup goimports
+GOIMPORTS:=$(DEPENDENCIES)/GOIMPORTS/$(GOIMPORTS_VERSION)
+$(GOIMPORTS):
+	@echo "installing GOIMPORTS $(GOIMPORTS_VERSION)..."
+	$(eval GOIMPORTS_TMP := $(shell mktemp -d))
+	@(cd "$(GOIMPORTS_TMP)" \
 		&& go mod init tmp \
-		&& go get github.com/mikefarah/yq/$(YQ_VERSION)) \
-		2>&1 | sed 's/^/  /'
-	@rm -rf $(YQ_TMP) $(dir $(YQ)) \
-		&& mkdir -p $(dir $(YQ)) \
-		&& touch $(YQ) \
+		&& go get "golang.org/x/tools/cmd/goimports@$(GOIMPORTS_VERSION)" \
+	) 2>&1 | sed 's/^/  /'
+	@rm -rf "$(GOIMPORTS_TMP)" "$(dir $(GOIMPORTS))" \
+		&& mkdir -p "$(dir $(GOIMPORTS))" \
+		&& touch "$(GOIMPORTS)" \
 		&& echo
+
+setup-dependencies: \
+	$(KIND) \
+	$(CONTROLLER_GEN) \
+	$(YQ) \
+	$(GOIMPORTS)
 
 # ----------
 # Deployment
