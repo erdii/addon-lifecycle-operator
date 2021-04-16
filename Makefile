@@ -53,20 +53,9 @@ clean:
 	rm -rf bin/$*
 .PHONY: clean
 
-# ----------
-# Deployment
-# ----------
-
-# Run against the configured Kubernetes cluster in ~/.kube/config or $KUBECONFIG
-run: generate fmt vet manifests
-	go run -ldflags "-w $(LD_FLAGS)" \
-		./cmd/addon-operator-manager/main.go \
-			-pprof-addr="127.0.0.1:8065"
-.PHONY: run
-
-# ----------
-# Generators
-# ----------
+# ------------
+# Dependencies
+# ------------
 
 # setup kind
 KIND:=$(DEPENDENCIES)/kind/$(KIND_VERSION)
@@ -95,6 +84,21 @@ $(CONTROLLER_GEN):
 		&& mkdir -p $(dir $(CONTROLLER_GEN)) \
 		&& touch $(CONTROLLER_GEN) \
 		&& echo
+
+# ----------
+# Deployment
+# ----------
+
+# Run against the configured Kubernetes cluster in ~/.kube/config or $KUBECONFIG
+run: generate fmt vet manifests
+	go run -ldflags "-w $(LD_FLAGS)" \
+		./cmd/addon-operator-manager/main.go \
+			-pprof-addr="127.0.0.1:8065"
+.PHONY: run
+
+# ----------
+# Generators
+# ----------
 
 # Generate manifests e.g. CRD, RBAC etc.
 manifests: $(CONTROLLER_GEN)
