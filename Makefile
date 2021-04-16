@@ -165,7 +165,7 @@ endif
 # -------------------
 
 test: generate fmt vet manifests
-	CGO_ENABLED=1 go test -race -v ./...
+	CGO_ENABLED=1 go test -race -v ./internal/... ./cmd/...
 .PHONY: test
 
 ci-test: test
@@ -177,7 +177,7 @@ e2e-test:
 	@export KUBECONFIG=$(abspath $(KIND_KUBECONFIG)) \
 		&& kubectl get pod -A \
 		&& echo \
-		&& go test -v ./internal/e2e/...
+		&& go test -v ./e2e/...
 .PHONY: e2e-test
 
 e2e: | setup-e2e-kind e2e-test
