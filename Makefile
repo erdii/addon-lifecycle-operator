@@ -208,6 +208,7 @@ apply-ao: build-image-addon-operator-manager
 		&& yq -y '.spec.template.spec.containers[0].image = "$(IMAGE_ORG)/addon-operator-manager:$(VERSION)"' \
 			config/deploy/deployment.yaml.tpl \
 			| kubectl apply -f - \
+		&& echo -e "\nwaiting for deployment/addon-operator..." \
 		&& kubectl wait --for=condition=available deployment/addon-operator -n addon-operator --timeout=240s \
 		&& echo) 2>&1 | sed 's/^/  /'
 .PHONY: apply-ao
