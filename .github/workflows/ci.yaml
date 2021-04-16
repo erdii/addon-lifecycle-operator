@@ -29,4 +29,4 @@ jobs:
         go-version: 1.16.x
     - uses: actions/checkout@v2
     - run: make setup-dependencies
-    - run: make e2e-test
+    - run: make e2e
