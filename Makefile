@@ -21,7 +21,6 @@ LD_FLAGS=-X $(MODULE)/internal/version.Version=$(VERSION) \
 			-X $(MODULE)/internal/version.Commit=$(SHORT_SHA) \
 			-X $(MODULE)/internal/version.BuildDate=$(BUILD_DATE)
 
-# TODO: move in-repo
 # Get the currently used golang install path (in GOPATH/bin, unless GOBIN is set)
 ifeq (,$(shell go env GOBIN))
 	GOBIN=$(shell go env GOPATH)/bin
@@ -120,6 +119,12 @@ ci-test: test
 	hack/validate-directory-clean.sh
 .PHONY: ci-test
 
+e2e-test: setup-e2e-kind
+	@export KUBECONFIG=$(KIND_KUBECONFIG) \
+		&& kubectl get pod -A \
+		&& echo "run your e2e tests here"
+.PHONY: e2e-test
+
 fmt:
 	go fmt ./...
 .PHONY: fmt
@@ -190,6 +195,7 @@ apply-ao: build-image-addon-operator-manager
 		&& yq -y '.spec.template.spec.containers[0].image = "$(IMAGE_ORG)/addon-operator-manager:$(VERSION)"' \
 			config/deploy/deployment.yaml.tpl \
 			| kubectl apply -f - \
+		&& kubectl wait --for=condition=available deployment/addon-operator -n addon-operator --timeout=240s \
 		&& echo) 2>&1 | sed 's/^/  /'
 .PHONY: apply-ao
 
