@@ -165,7 +165,7 @@ endif
 # -------------------
 
 test: generate fmt vet manifests
-	go test -race -v ./...
+	CGO_ENABLED=1 go test -race -v ./...
 .PHONY: test
 
 ci-test: test
