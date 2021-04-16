@@ -4,11 +4,12 @@ import (
 	"context"
 	"testing"
 
-	addonsv1alpha1 "github.com/openshift/addon-operator/apis/addons/v1alpha1"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	apiextensionsv1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
 	"k8s.io/apimachinery/pkg/types"
+
+	addonsv1alpha1 "github.com/openshift/addon-operator/apis/addons/v1alpha1"
 )
 
 // Test that the Addon CRD exists and is served.

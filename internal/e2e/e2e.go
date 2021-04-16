@@ -2,12 +2,13 @@
 package e2e
 
 import (
-	aoapis "github.com/openshift/addon-operator/apis"
 	apiextensionsv1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	clientgoscheme "k8s.io/client-go/kubernetes/scheme"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
+
+	aoapis "github.com/openshift/addon-operator/apis"
 )
 
 var (
