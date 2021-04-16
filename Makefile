@@ -165,18 +165,23 @@ endif
 # -------------------
 
 test: generate fmt vet manifests
-	CGO_ENABLED=1 go test -race -v ./...
+	go test -race -v ./...
 .PHONY: test
 
 ci-test: test
 	hack/validate-directory-clean.sh
 .PHONY: ci-test
 
-e2e-test: setup-e2e-kind
-	@export KUBECONFIG=$(KIND_KUBECONFIG) \
+e2e-test:
+	@echo "running e2e tests..."
+	@export KUBECONFIG=$(abspath $(KIND_KUBECONFIG)) \
 		&& kubectl get pod -A \
-		&& echo "run your e2e tests here"
+		&& echo \
+		&& go test -v ./internal/e2e/...
 .PHONY: e2e-test
+
+e2e: | setup-e2e-kind e2e-test
+.PHONY: e2e
 
 fmt:
 	go fmt ./...
