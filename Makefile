@@ -21,7 +21,6 @@ LD_FLAGS=-X $(MODULE)/internal/version.Version=$(VERSION) \
 			-X $(MODULE)/internal/version.Commit=$(SHORT_SHA) \
 			-X $(MODULE)/internal/version.BuildDate=$(BUILD_DATE)
 
-# TODO: move in-repo
 # Get the currently used golang install path (in GOPATH/bin, unless GOBIN is set)
 ifeq (,$(shell go env GOBIN))
 	GOBIN=$(shell go env GOPATH)/bin
@@ -113,6 +112,11 @@ test: generate fmt vet manifests
 ci-test: test
 	hack/validate-directory-clean.sh
 .PHONY: ci-test
+
+e2e-test: setup-e2e-kind
+	@export KUBECONFIG=$(KIND_KUBECONFIG) \
+		&& kubectl get pod -A
+.PHONY: e2e-test
 
 fmt:
 	go fmt ./...
