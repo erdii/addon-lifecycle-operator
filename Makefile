@@ -116,6 +116,7 @@ ci-test: test
 e2e-test: setup-e2e-kind
 	@export KUBECONFIG=$(KIND_KUBECONFIG) \
 		&& kubectl get pod -A
+		&& echo "run your e2e tests here"
 .PHONY: e2e-test
 
 fmt:
@@ -152,7 +153,7 @@ setup-e2e-kind: | \
 	create-kind-cluster \
 	apply-olm \
 	apply-openshift-console \
-	apply-ao
+	build-and-apply-addon-operator
 
 apply-olm:
 	@export KUBECONFIG=$(KIND_KUBECONFIG) \
@@ -167,7 +168,7 @@ apply-openshift-console:
 		&& kubectl apply -f hack/openshift-console.yaml
 .PHONY: apply-openshift-console
 
-apply-ao: build-image-addon-operator-manager
+build-and-apply-addon-operator: build-image-addon-operator-manager
 	@source hack/determine-container-runtime.sh \
 		&& export KUBECONFIG=$(KIND_KUBECONFIG) \
 		&& $$KIND_COMMAND load image-archive \
@@ -176,8 +177,9 @@ apply-ao: build-image-addon-operator-manager
 		&& kubectl apply -f config/deploy \
 		&& yq -y '.spec.template.spec.containers[0].image = "$(IMAGE_ORG)/addon-operator-manager:$(VERSION)"' \
 			config/deploy/deployment.yaml.tpl \
-			| kubectl apply -f -
-.PHONY: apply-ao
+			| kubectl apply -f - \
+		&& kubectl wait --for=condition=available deployment/addon-operator -n addon-operator --timeout=240s
+.PHONY: build-and-apply-addon-operator
 
 # ----------------
 # Container Images
