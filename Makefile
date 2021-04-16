@@ -115,7 +115,7 @@ ci-test: test
 
 e2e-test: setup-e2e-kind
 	@export KUBECONFIG=$(KIND_KUBECONFIG) \
-		&& kubectl get pod -A
+		&& kubectl get pod -A \
 		&& echo "run your e2e tests here"
 .PHONY: e2e-test
 
