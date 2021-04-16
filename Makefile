@@ -3,15 +3,18 @@
 
 IMAGE_ORG?=quay.io/openshift
 MODULE:=github.com/openshift/addon-operator
+KIND_KUBECONFIG:=bin/e2e/kubeconfig
+
+# Dependency Versions
 CONTROLLER_GEN_VERSION:=v0.5.0
 OLM_VERSION:=v0.17.0
-KIND_KUBECONFIG:=bin/e2e/kubeconfig
+KIND_VERSION:=v0.10.0
 
 SHELL=/bin/bash
 .SHELLFLAGS=-euo pipefail -c
 
+# Build Flags
 export CGO_ENABLED:=0
-
 BRANCH=$(shell git rev-parse --abbrev-ref HEAD)
 SHORT_SHA=$(shell git rev-parse --short HEAD)
 VERSION?=${BRANCH}-${SHORT_SHA}
@@ -21,12 +24,13 @@ LD_FLAGS=-X $(MODULE)/internal/version.Version=$(VERSION) \
 			-X $(MODULE)/internal/version.Commit=$(SHORT_SHA) \
 			-X $(MODULE)/internal/version.BuildDate=$(BUILD_DATE)
 
-# Get the currently used golang install path (in GOPATH/bin, unless GOBIN is set)
-ifeq (,$(shell go env GOBIN))
-	GOBIN=$(shell go env GOPATH)/bin
-else
-	GOBIN=$(shell go env GOBIN)
-endif
+UNAME_OS:=$(shell uname -s)
+UNAME_ARCH:=$(shell uname -m)
+
+# PATH/Bin
+DEPENDENCIES:=bin/dependencies/$(UNAME_OS)/$(UNAME_ARCH)
+export GOBIN?=$(abspath $(DEPENDENCIES)/bin)
+export PATH:=$(GOBIN):$(PATH)
 
 # -------
 # Compile
@@ -64,19 +68,47 @@ run: generate fmt vet manifests
 # Generators
 # ----------
 
+# setup kind
+KIND:=$(DEPENDENCIES)/kind/$(KIND_VERSION)
+$(KIND):
+	@echo "installing kind $(KIND_VERSION)..."
+	$(eval KIND_TMP := $(shell mktemp -d))
+	@(cd $(KIND_TMP) \
+		&& go mod init tmp \
+		&& go get sigs.k8s.io/kind@$(KIND_VERSION)) \
+		2>&1 | sed 's/^/  /'
+	@rm -rf $(KIND_TMP ) $(dir $(KIND)) \
+		&& mkdir -p $(dir $(KIND)) \
+		&& touch $(KIND) \
+		&& echo
+
+# setup controller-gen
+CONTROLLER_GEN:=$(DEPENDENCIES)/controller-gen/$(CONTROLLER_GEN_VERSION)
+$(CONTROLLER_GEN):
+	@echo "installing controller-gen $(CONTROLLER_GEN_VERSION)..."
+	$(eval CONTROLLER_GEN_TMP := $(shell mktemp -d))
+	@(cd $(CONTROLLER_GEN_TMP) \
+		&& go mod init tmp \
+		&& go get sigs.k8s.io/controller-tools/cmd/controller-gen@$(CONTROLLER_GEN_VERSION)) \
+		2>&1 | sed 's/^/  /'
+	@rm -rf $(CONTROLLER_GEN_TMP ) $(dir $(CONTROLLER_GEN)) \
+		&& mkdir -p $(dir $(CONTROLLER_GEN)) \
+		&& touch $(CONTROLLER_GEN) \
+		&& echo
+
 # Generate manifests e.g. CRD, RBAC etc.
-manifests: controller-gen
+manifests: $(CONTROLLER_GEN)
 	@echo "generating kubernetes manifests..."
-	@$(CONTROLLER_GEN) crd:crdVersions=v1 \
+	@controller-gen crd:crdVersions=v1 \
 		rbac:roleName=addon-operator-manager \
 		paths="./..." \
 		output:crd:artifacts:config=config/deploy 2>&1 | sed 's/^/  /'
 	@echo
 
 # Generate code
-generate: controller-gen
+generate: $(CONTROLLER_GEN)
 	@echo "generating code..."
-	@$(CONTROLLER_GEN) object paths=./apis/... 2>&1 | sed 's/^/  /'
+	@controller-gen object paths=./apis/... 2>&1 | sed 's/^/  /'
 	@echo
 
 # Makes sandwich
@@ -86,25 +118,6 @@ ifneq ($(shell id -u), 0)
 	@echo "What? Make it yourself."
 else
 	@echo "Okay."
-endif
-
-# find or download controller-gen
-# download controller-gen if necessary
-# Note: this will not upgrade from previously downloaded controller-gen versions
-# TODO: fix ^
-controller-gen:
-ifeq (, $(shell which controller-gen))
-	@{ \
-	set -e ;\
-	CONTROLLER_GEN_TMP_DIR=$$(mktemp -d) ;\
-	cd $$CONTROLLER_GEN_TMP_DIR ;\
-	go mod init tmp ;\
-	go get sigs.k8s.io/controller-tools/cmd/controller-gen@$(CONTROLLER_GEN_VERSION) ;\
-	rm -rf $$CONTROLLER_GEN_TMP_DIR ;\
-	}
-CONTROLLER_GEN=$(GOBIN)/controller-gen
-else
-CONTROLLER_GEN=$(shell which controller-gen)
 endif
 
 # -------------------
@@ -138,7 +151,7 @@ pre-commit-install:
 	@pre-commit install
 .PHONY: pre-commit-install
 
-create-kind-cluster:
+create-kind-cluster: $(KIND)
 	@echo "creating kind cluster addon-operator-e2e..."
 	@mkdir -p bin/e2e
 	@(source hack/determine-container-runtime.sh \
@@ -149,7 +162,7 @@ create-kind-cluster:
 		&& echo) 2>&1 | sed 's/^/  /'
 .PHONY: create-kind-cluster
 
-delete-kind-cluster:
+delete-kind-cluster: $(KIND)
 	@echo "deleting kind cluster addon-operator-e2e..."
 	@(source hack/determine-container-runtime.sh \
 		&& $$KIND_COMMAND delete cluster \
