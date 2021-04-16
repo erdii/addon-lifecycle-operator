@@ -9,6 +9,7 @@ KIND_KUBECONFIG:=bin/e2e/kubeconfig
 CONTROLLER_GEN_VERSION:=v0.5.0
 OLM_VERSION:=v0.17.0
 KIND_VERSION:=v0.10.0
+YQ_VERSION:=v4@v4.7.0
 
 SHELL=/bin/bash
 .SHELLFLAGS=-euo pipefail -c
@@ -66,7 +67,7 @@ $(KIND):
 		&& go mod init tmp \
 		&& go get sigs.k8s.io/kind@$(KIND_VERSION)) \
 		2>&1 | sed 's/^/  /'
-	@rm -rf $(KIND_TMP ) $(dir $(KIND)) \
+	@rm -rf $(KIND_TMP) $(dir $(KIND)) \
 		&& mkdir -p $(dir $(KIND)) \
 		&& touch $(KIND) \
 		&& echo
@@ -80,9 +81,23 @@ $(CONTROLLER_GEN):
 		&& go mod init tmp \
 		&& go get sigs.k8s.io/controller-tools/cmd/controller-gen@$(CONTROLLER_GEN_VERSION)) \
 		2>&1 | sed 's/^/  /'
-	@rm -rf $(CONTROLLER_GEN_TMP ) $(dir $(CONTROLLER_GEN)) \
+	@rm -rf $(CONTROLLER_GEN_TMP) $(dir $(CONTROLLER_GEN)) \
 		&& mkdir -p $(dir $(CONTROLLER_GEN)) \
 		&& touch $(CONTROLLER_GEN) \
+		&& echo
+
+# setup yq
+YQ:=$(DEPENDENCIES)/yq/$(YQ_VERSION)
+$(YQ):
+	@echo "installing yq $(YQ_VERSION)..."
+	$(eval YQ_TMP := $(shell mktemp -d))
+	@(cd $(YQ_TMP) \
+		&& go mod init tmp \
+		&& go get github.com/mikefarah/yq/$(YQ_VERSION)) \
+		2>&1 | sed 's/^/  /'
+	@rm -rf $(YQ_TMP) $(dir $(YQ)) \
+		&& mkdir -p $(dir $(YQ)) \
+		&& touch $(YQ) \
 		&& echo
 
 # ----------
@@ -201,7 +216,7 @@ apply-openshift-console:
 		&& echo) 2>&1 | sed 's/^/  /'
 .PHONY: apply-openshift-console
 
-apply-ao: build-image-addon-operator-manager
+apply-ao: $(YQ) build-image-addon-operator-manager
 	@echo "installing Addon Operator $(VERSION)..."
 	@(source hack/determine-container-runtime.sh \
 		&& export KUBECONFIG=$(KIND_KUBECONFIG) \
@@ -209,7 +224,7 @@ apply-ao: build-image-addon-operator-manager
 			bin/image/addon-operator-manager.tar \
 			--name addon-operator-e2e \
 		&& kubectl apply -f config/deploy \
-		&& yq -y '.spec.template.spec.containers[0].image = "$(IMAGE_ORG)/addon-operator-manager:$(VERSION)"' \
+		&& yq eval '.spec.template.spec.containers[0].image = "$(IMAGE_ORG)/addon-operator-manager:$(VERSION)"' \
 			config/deploy/deployment.yaml.tpl \
 			| kubectl apply -f - \
 		&& echo -e "\nwaiting for deployment/addon-operator..." \
