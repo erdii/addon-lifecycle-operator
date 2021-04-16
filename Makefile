@@ -71,13 +71,13 @@ manifests: controller-gen
 	@$(CONTROLLER_GEN) crd:crdVersions=v1 \
 		rbac:roleName=addon-operator-manager \
 		paths="./..." \
-		output:crd:artifacts:config=config/deploy  2>&1 | sed 's/^/  /'
+		output:crd:artifacts:config=config/deploy 2>&1 | sed 's/^/  /'
 	@echo
 
 # Generate code
 generate: controller-gen
 	@echo "generating code..."
-	@$(CONTROLLER_GEN) object paths=./apis/...  2>&1 | sed 's/^/  /'
+	@$(CONTROLLER_GEN) object paths=./apis/... 2>&1 | sed 's/^/  /'
 	@echo
 
 # Makes sandwich
