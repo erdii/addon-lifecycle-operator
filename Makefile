@@ -63,13 +63,13 @@ KIND:=$(DEPENDENCIES)/kind/$(KIND_VERSION)
 $(KIND):
 	@echo "installing kind $(KIND_VERSION)..."
 	$(eval KIND_TMP := $(shell mktemp -d))
-	@(cd $(KIND_TMP) \
+	@(cd "$(KIND_TMP)" \
 		&& go mod init tmp \
-		&& go get sigs.k8s.io/kind@$(KIND_VERSION)) \
-		2>&1 | sed 's/^/  /'
-	@rm -rf $(KIND_TMP) $(dir $(KIND)) \
-		&& mkdir -p $(dir $(KIND)) \
-		&& touch $(KIND) \
+		&& go get "sigs.k8s.io/kind@$(KIND_VERSION)" \
+	) 2>&1 | sed 's/^/  /'
+	@rm -rf "$(KIND_TMP)" "$(dir $(KIND))" \
+		&& mkdir -p "$(dir $(KIND))" \
+		&& touch "$(KIND)" \
 		&& echo
 
 # setup controller-gen
@@ -77,13 +77,13 @@ CONTROLLER_GEN:=$(DEPENDENCIES)/controller-gen/$(CONTROLLER_GEN_VERSION)
 $(CONTROLLER_GEN):
 	@echo "installing controller-gen $(CONTROLLER_GEN_VERSION)..."
 	$(eval CONTROLLER_GEN_TMP := $(shell mktemp -d))
-	@(cd $(CONTROLLER_GEN_TMP) \
+	@(cd "$(CONTROLLER_GEN_TMP)" \
 		&& go mod init tmp \
-		&& go get sigs.k8s.io/controller-tools/cmd/controller-gen@$(CONTROLLER_GEN_VERSION)) \
-		2>&1 | sed 's/^/  /'
-	@rm -rf $(CONTROLLER_GEN_TMP) $(dir $(CONTROLLER_GEN)) \
-		&& mkdir -p $(dir $(CONTROLLER_GEN)) \
-		&& touch $(CONTROLLER_GEN) \
+		&& go get "sigs.k8s.io/controller-tools/cmd/controller-gen@$(CONTROLLER_GEN_VERSION)" \
+	) 2>&1 | sed 's/^/  /'
+	@rm -rf "$(CONTROLLER_GEN_TMP)" "$(dir $(CONTROLLER_GEN))" \
+		&& mkdir -p "$(dir $(CONTROLLER_GEN))" \
+		&& touch "$(CONTROLLER_GEN)" \
 		&& echo
 
 # setup yq
@@ -91,6 +91,15 @@ YQ:=$(DEPENDENCIES)/yq/$(YQ_VERSION)
 $(YQ):
 	@echo "installing yq $(YQ_VERSION)..."
 	$(eval YQ_TMP := $(shell mktemp -d))
+	@(cd "$(YQ_TMP)" \
+		&& go mod init tmp \
+		&& go get "github.com/mikefarah/yq/$(YQ_VERSION)" \
+	) 2>&1 | sed 's/^/  /'
+	@rm -rf "$(YQ_TMP)" "$(dir $(YQ))" \
+		&& mkdir -p "$(dir $(YQ))" \
+		&& touch "$(YQ)" \
+		&& echo
+
 	@(cd $(YQ_TMP) \
 		&& go mod init tmp \
 		&& go get github.com/mikefarah/yq/$(YQ_VERSION)) \
