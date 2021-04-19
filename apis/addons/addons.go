@@ -3,7 +3,7 @@ package addons
 import (
 	"k8s.io/apimachinery/pkg/runtime"
 
-	"github.com/openshift/addon-lifecycle-operator/apis/addons/v1alpha1"
+	"github.com/openshift/addon-operator/apis/addons/v1alpha1"
 )
 
 // AddToSchemes may be used to add all resources defined in the project to a Scheme

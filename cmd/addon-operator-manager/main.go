@@ -13,7 +13,8 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/log/zap"
 	"sigs.k8s.io/controller-runtime/pkg/manager"
 
-	aloapis "github.com/openshift/addon-lifecycle-operator/apis"
+	aoapis "github.com/openshift/addon-operator/apis"
+	"github.com/openshift/addon-operator/internal/controllers"
 )
 
 var (
@@ -23,7 +24,7 @@ var (
 
 func init() {
 	_ = clientgoscheme.AddToScheme(scheme)
-	_ = aloapis.AddToScheme(scheme)
+	_ = aoapis.AddToScheme(scheme)
 }
 
 func main() {
@@ -47,7 +48,7 @@ func main() {
 		Port:                       9443,
 		LeaderElectionResourceLock: "leases",
 		LeaderElection:             enableLeaderElection,
-		LeaderElectionID:           "addon-lifecycle-operator-lock",
+		LeaderElectionID:           "8a4hp84a6s.addon-operator-lock",
 	})
 	if err != nil {
 		setupLog.Error(err, "unable to start manager")
@@ -89,6 +90,15 @@ func main() {
 			setupLog.Error(err, "unable to create pprof server")
 			os.Exit(1)
 		}
+	}
+
+	if err = (&controllers.AddonReconciler{
+		Client: mgr.GetClient(),
+		Log:    ctrl.Log.WithName("controllers").WithName("Addon"),
+		Scheme: mgr.GetScheme(),
+	}).SetupWithManager(mgr); err != nil {
+		setupLog.Error(err, "unable to create controller", "controller", "Addon")
+		os.Exit(1)
 	}
 
 	setupLog.Info("starting manager")
